@@ -44,43 +44,42 @@ passwd archuser
 EDITOR=nano visudo
     #%wheel ALL=(ALL) ALL #<- uncomment
 systemctl enable NetworkManager
-nano /usr/lib/initcpio/install/iscsi
-    #build ()
-    #{
-    #    local mod
-    #    for mod in iscsi_ibft iscsi_tcp libiscsi libiscsi_tcp scsi_transport_iscsi crc32c; do
-    #        add_module "$mod"
-    #    done
-    #
-    #    add_checked_modules "/drivers/net"
-    #    add_binary "/usr/bin/iscsistart"
-    #    add_runscript
-    #}
-    #
-    #help ()
-    #{
-    #cat <<HELPEOF
-    #  This hook allows you to boot from an iSCSI target.
-    #HELPEOF
-    #}
+cat <<EOF > /usr/lib/initcpio/install/iscsi
+build ()
+{
+    local mod
+    for mod in iscsi_ibft iscsi_tcp libiscsi libiscsi_tcp scsi_transport_iscsi crc32c; do
+        add_module "$mod"
+    done
 
-nano /usr/lib/initcpio/hooks/iscsi
-    #run_hook ()
-    #{
-    #    modprobe iscsi_tcp
-    #    modprobe iscsi_ibft
-    #
-    #    echo "Network configuration based on iBFT"
-    #    iscsistart -N || echo "Unable to configure network"
-    #
-    #    echo "Waiting 5 seconds..."
-    #    sleep 5
-    #
-    #    echo "iSCSI auto connect based on iBFT"
-    #    until iscsistart -b ; do
-    #        sleep 3
-    #    done
-    #}
+    add_checked_modules "/drivers/net"
+    add_binary "/usr/bin/iscsistart"
+    add_runscript
+}
+
+help ()
+{
+    cat <<HELPEOF
+    This hook allows you to boot from an iSCSI target.
+HELPEOF
+}
+EOF
+
+cat <<EOF > /usr/lib/initcpio/hooks/iscsi
+run_hook ()
+{
+    modprobe iscsi_tcp
+    modprobe iscsi_ibft
+    echo "Network configuration based on iBFT"
+    iscsistart -N || echo "Unable to configure network"
+    echo "Waiting 5 seconds..."
+    sleep 5
+    echo "iSCSI auto connect based on iBFT"
+    until iscsistart -b ; do
+        sleep 3
+    done
+}
+EOF
 
 nano /etc/mkinitcpio.conf
     #・・・
