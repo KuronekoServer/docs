@@ -68,7 +68,7 @@ protectKernelDefaults: true
 EOF
 ```
 
-Second
+### Second
 ```
 nvim /etc/default/grub
 ```
@@ -80,7 +80,7 @@ sudo grub-mkconfig -o /boot/grub/grub.cfg
 sudo reboot
 ```
 
-Third
+### Third
 
 ```
 sudo kubeadm init --config ./init_kubelet.yaml
