@@ -73,7 +73,7 @@ Second
 nvim /etc/default/grub
 ```
 
-add systemd.unified_cgroup_hierarchy=false to GRUB_CMDLINE_LINUX_DEFAULT
+add `systemd.unified_cgroup_hierarchy=false` to `GRUB_CMDLINE_LINUX_DEFAULT`
 
 ```
 sudo grub-mkconfig -o /boot/grub/grub.cfg
