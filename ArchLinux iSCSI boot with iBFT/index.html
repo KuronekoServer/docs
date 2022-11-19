@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArchLinux ISCSI Boot</title>
+</head>
+
+<body>
+    <header>
+        <img src="https://bbs.archlinux.org/style/ArchLinux/archlogo.svg" alt="" width="190px" height="40px">
+        <h2 style="color: #999999; right: 0; height: 32px; margin: 2.5px 0 2.5px auto;">ISCSI Boot</h2>
+    </header>
+    <br>
+    <div id="content">
+        <h2 style="font-size: 1.5em; margin-bottom: 0.5em; border-bottom: 1px solid #888;">インストールマニュアル</h2>
+        <p>日本語キーボードを使う場合は設定してください。</p>
+        <div class="code"><code><pre>loadkeys jp106</pre></code></div>
+        <p>iscsiのドライバーをインストールし有効化しください。</p>
+        <div class="code"><code>
+            <pre>pacman -Sy --noconfirm</pre>
+            <pre>pacman -S open-iscsi --noconfirm</pre>
+            <pre>systemctl enable --now iscsid</pre>
+        </code></div>
+        <p>iscsiイニシエーターの設定をしてください。</p>
+        <div class="code"><code>
+            <pre>echo "InitiatorName=iqn.2000-01.org.arch:archlinux" > /etc/iscsi/initiatorname.iscsi</pre>
+        </code></div>
+        <p>iscsiターゲットに接続してください。</p>
+        <div class="code"><code>
+            <pre>iscsiadm -m discovery -t sendtargets -p 192.168.1.10</pre>
+            <pre>iscsiadm -m node -T iqn.2000-01.org.arch-target:archlinux-target -p 192.168.11.10 -l</pre>
+        </code></div>
+        <p>iscsiディスクがどこにつながったか確認し、パーティショニングしてください。<br>(ここでは/dev/sdbをiscsiディスクとします。)</p>
+        <p> ※swapはiscsiに構成しないことを推奨します。この忠告は無視しても構いません。</p>
+        <div class="code"><code>
+            <pre>fdisk -l</pre>
+            <pre>fdisk /dev/sdb</pre>
+            -> g -> n -> -> -> +512M (-> Y ) -> n -> -> -> -> (-> Y ) -> w
+        </code></div>
+        <p>フォーマットし、マウントしてください。</p>
+        <div class="code"><code>
+            <pre>mkfs.xfs /dev/sdb2</pre>
+            <pre>mkfs.fat -F 32 /dev/sdb1</pre>
+            <pre>mount /dev/sdb2 /mnt</pre>
+            <pre>mkdir /mnt/boot</pre>
+            <pre>mount /dev/sdb1 /mnt/boot</pre>
+        </code></div>
+        <p>必要なパッケージを入れてください。</p>
+        <div class="code"><code>
+            <pre>pacstrap /mnt base linux linux-firmware sof-firmware base-devel grub efibootmgr nano networkmanager open-iscsi openssh</pre>
+        </code></div>
+        <p>パーティションとファイルシステムの情報をかきこんでください。<br>/mnt/etc/fstabの中の全ての/dev/sdbを/dev/sdaに書き換えてください。<br>(再起動する際iscsiは再接続されるためsdbにはならずsbaになるからです)
+        </p>
+        <div class="code"><code>
+            <pre>genfstab /mnt</pre>
+            <pre>genfstab /mnt > /mnt/etc/fstab</pre>
+            <pre>nano /mnt/etc/fstab</pre>
+            -> sdb を sda に書き換えてください
+        </code></div>
+        <p>arch-chrootを実行してください。</p>
+        <div class="code"><code>
+            <pre>arch-chroot /mnt</pre>
+        </code></div>
+        <p>locale、ユーザー等の必要な設定をしてください。</p>
+        <div class="code"><code>
+            <pre>ln -sf /usr/share/zoneinfo/Asia/Tokyo /etc/localtime</pre>
+            <pre>nano /etc/hostname</pre>
+            -> localhost
+            <pre>passwd</pre>
+            <pre>useradd -m -G wheel -s /bin/bash archuser</pre>
+            <pre>passwd archuser</pre>
+            <pre>EDITOR=nano visudo</pre>
+            %wheel ALL=(ALL) ALL # <-UNCOMMENT
+            <pre>systemctl enable NetworkManager</pre>
+            <pre>systemctl enable sshd</pre>
+        </code></div>
+        <p>initcpioにiscsiを読み込ませる設定をしてください。<br>(下記のやり方はiBFTのデータを使用するよう設定されています。)</p>
+        <div class="code"><code>
+            <pre>nano /usr/lib/initcpio/install/iscsi</pre>
+            <pre>nano /etc/initcpio/hooks/iscsi</pre>
+            <pre>nano /etc/mkinitcpio.conf</pre>
+        </code></div>
+        <p>/usr/lib/initcpio/install/iscsi</p>
+        <div class="code"><code class="nano">
+            <pre>build ()</pre>
+            <pre>{</pre>
+            <pre>    local mod</pre>
+            <pre>    for mod in iscsi_tcp iscsi_ibft libiscsi libiscsi_tcp scsi_transport_iscsi crc32c; do</pre>     
+            <pre>    add_module "$mod"</pre>                    
+            <pre>    done</pre>            
+            <pre>    add_checked_modules "/drivers/net"</pre>
+            <pre>    add_checked_modules "/drivers/net"</pre>            
+            <pre>    add_binary iscsistart</pre>            
+            <pre>    add_runscript</pre>        
+            <pre>}</pre>    
+            <pre></pre>
+            <pre>help ()</pre>    
+            <pre>{</pre>
+            <pre>    cat &lt;&lt;HELPEOF</pre>    
+            <pre>        This hook allows you to boot from an iSCSI target.</pre>            
+            <pre>HELPEOF</pre>    
+            <pre>}</pre>
+        </code></div>
+        <p>/etc/initcpio/hooks/iscsi</p>
+        <div class="code"><code class="nano">
+            <pre>run_hook ()</pre>
+            <pre>{</pre>
+            <pre>    modprobe iscsi_tcp</pre>
+            <pre>    modprobe iscsi_ibft</pre>     
+            <pre></pre>                    
+            <pre>    echo "Network configuration based on iBFT"</pre>            
+            <pre>    iscsistart -N {{|}}{{|}} echo "Unable to configure network"</pre>
+            <pre></pre>            
+            <pre>    echo "Waiting 5 seconds..."</pre>            
+            <pre>    sleep 5</pre>        
+            <pre></pre>    
+            <pre>    echo "iSCSI auto connect based on iBFT"</pre>
+            <pre>    until iscsistart -b ; do</pre>    
+            <pre>        sleep 3</pre>
+            <pre>    done</pre>    
+            <pre>}</pre>
+        </code></div>
+        <p>/etc/mkinitcpio.conf</p>
+        <div class="code"><code class="nano">
+            blockの前に iscsi を入れてください。
+
+            <pre>・・・</pre>
+            <pre>HOOKS=(... iscsi block ...)</pre>
+            <pre>・・・</pre>
+        </code></div>
+        <br>
+        <p>initcpioの設定とgrubの設定をしてください。</p>
+        <div class="code"><code>
+            <pre>pacman-key --init</pre>
+            <pre>pacman-key --populate archlinux</pre>
+            <pre>pacman -Sy xfsprogs intel-ucode --noconfirm</pre>
+            <pre>nano /etc/iscsi/iscsid.conf</pre>
+            <br>
+            下記の項目を下記の値に書き換えてください。
+            <br>
+            node.startup = automatic<br>
+            node.session.timeo.replacement_timeout = 86400<br>
+            node.conn[0].timeo.noop_out_interval = 0<br>
+            node.conn[0].timeo.noop_out_timeout = 0<br>
+            <pre>mkinitcpio -p linux</pre>
+            <pre>grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=grub</pre>
+            <pre>grub-mkconfig -o /boot/grub/grub.cfg</pre>
+        </code></div>
+        <p>これで終わりです。シャットダウンし、usbを抜いた後、起動してください。</p>
+        <div class="code"><code>
+            <pre>exit</pre>
+            <pre>unmount -a</pre>
+            unmountでエラーが出た場合は無視てください。
+            <pre>reboot</pre>
+        </code></div>
+    </div>
+</body>
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        color: #222;
+        font: sans-serif;
+    }
+
+    header {
+        display: flex;
+        height: 40px;
+        padding: 10px 15px;
+        background: #333 !important;
+        border-bottom: 5px #08c solid !important;
+    }
+
+    #content {
+        width: 95%;
+        margin: 0 auto;
+        padding: 0.65em;
+        background: #ecf2f5;
+        border: 1px solid #bcd;
+    }
+
+    .code {
+        border: 1px #bcd solid;
+        background: #fff;
+        padding: 0.5em;
+        margin-bottom: 17px;
+    }
+
+    pre:before {
+        content: "[root@archiso /]# ";
+    }
+
+    .nano pre:before {
+        content: "";
+    }
+
+    #arch:before{
+        content: "root@archiso ~ ";
+    }
+</style>
+
+</html>
